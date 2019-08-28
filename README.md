@@ -1,0 +1,2 @@
+# ngx-flowchart
+library jsPlumb
