@@ -1,10 +1,10 @@
-import { Component, OnInit, AfterViewInit, Input } from '@angular/core';
+import { Component, OnInit, AfterViewInit, Input, ElementRef } from '@angular/core';
 import $ from 'jquery';
 import * as d3 from 'd3';
 import { CdkDragDrop, CdkDragMove, CdkDragStart, CdkDragEnd } from '@angular/cdk/drag-drop';
 import { MOTION } from './directive/contents';
-import { Subject, BehaviorSubject } from 'rxjs';
-import { filter, timeout } from 'rxjs/operators';
+import { Subject, BehaviorSubject, asapScheduler } from 'rxjs';
+import { filter, timeout, observeOn } from 'rxjs/operators';
 declare const jsPlumb: any;
 export interface Node {
   uid: string;
@@ -21,6 +21,7 @@ export interface CdkDragNode {
   iconType: string;
   iconColor: string;
 }
+
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
@@ -37,6 +38,11 @@ export class AppComponent implements OnInit, AfterViewInit {
   instance;
   enty$ = new Subject();
   code = 1;
+  staticX;
+  staticY;
+  siderNodeX;
+  siderNodeY;
+  private changes: MutationObserver;
   common = {
     // 是否可作为起点
     isSource: true,
@@ -76,115 +82,89 @@ export class AppComponent implements OnInit, AfterViewInit {
     },
     connectorOverlays: [
       ['PlainArrow', { width: 12, length: 12, location: 1 }],
+      [ "Label", { label:"文本指示", location:50, id:"myLabel" } ]
     ],
+    maxConnections: -1
   };
+  constructor(private elementRef: ElementRef) {
+
+  }
   ngAfterViewInit(): void {
     const that = this;
-    const color = '#5b5a57';
-    const common = {
-      // 是否可作为起点
-      isSource: true,
-      // 是否可作为终点
-      isTarget: true,
-      // 连线的类型 直线、曲线
-      connector: ['Bezier', { curviness: 150 }],
-      // 端点类型
-      endpoint: 'Dot',
-      // 端点样式
-      paintStyle: {
-        // 填充
-        fill: 'white',
-        // 角度
-        radius: 5,
-        // 填充颜色
-        fillStyle: '#D4FFD6',
-        // 描边颜色
-        outlineStroke: 'blue',
-        // 填充宽度
-        strokeWidth: 1
-      },
-      // hover时的点位样式
-      hoverPaintStyle: {
-        outlineStroke: 'lightblue'
-      },
-      // 连接过程中的样式
-      connectorStyle: {
-        radius: 5,
-        // 描边颜色
-        outlineStroke: '#808080',
-        strokeWidth: 2
-      },
-      // 连接后的样式
-      connectorHoverStyle: {
-        strokeWidth: 2
-      },
-      connectorOverlays: [
-        ['PlainArrow', { width: 12, length: 12, location: 1 }],
-      ],
-    };
     jsPlumb.ready(() => {
-
       that.enty$.pipe(
         filter(x => x != null)
       ).subscribe(res => {
         if (this.nodeList.length !== 0) {
+          that.changes.disconnect();
+          console.log($('#' + this.nodeList[this.nodeList.length - 1].uid));
           jsPlumb.addEndpoint($('#' + this.nodeList[this.nodeList.length - 1].uid), {
             anchors: ['Left']
           }, this.common);
           jsPlumb.addEndpoint($('#' + this.nodeList[this.nodeList.length - 1].uid), {
             anchors: ['Right']
           }, this.common);
-          // jsPlumb.draggable($('#' + this.nodeList[j].uid));
-          const aa = jsPlumb.getSelector('#' + this.nodeList[this.nodeList.length - 1].uid)[0];
-          jsPlumb.draggable(aa, {
-            containment: 'parent'
-          });
+          jsPlumb.draggable($('#' + this.nodeList[this.nodeList.length - 1].uid));
         }
       });
       jsPlumb.addEndpoint('01_node_function', {
         anchors: ['Right']
-      }, common);
+      }, this.common);
       jsPlumb.addEndpoint('02_node_function', {
         anchors: ['Left']
-      }, common);
-      jsPlumb.addEndpoint('02_node_function', {
-        anchors: ['Right']
-      }, common);
-      jsPlumb.addEndpoint('01_node_function', {
-        anchors: ['Left']
-      }, common);
+      }, this.common);
       jsPlumb.draggable('01_node_function');
       jsPlumb.draggable('02_node_function');
       jsPlumb.importDefaults({
-        ConnectionsDetachable: false
+        deleteEndpointsOnDetach: false
       });
     });
   }
   ngOnInit(): void {
-
   }
   viewLoad($e) {
     console.log('$e', $e);
     this.enty$.next(this.code + '');
   }
-  CdkDragStarts(event: CdkDragStart) {
-    console.log('CdkDragStarts', event);
+  /**
+   * 从左侧列表开始拖动时触发
+   */
+  CdkDragStarts(event: CdkDragStart, sideIndex: number) {
+    // 操作区对于屏幕的实际坐标（位移坐标减去滚动后的坐标）
+    this.staticX = $('#flow-panel').offset().left - $('#flow-panel').scrollLeft();
+    this.staticY = $('#flow-panel').offset().top - $('#flow-panel').scrollTop();
+    // 列表内的拖拽块与操作区显示的拖拽块存在margin-top的位置偏差，暨拖拽完成后，比实际位置少了一个margin-top的距离
+    const num = Number.parseInt($(`#motion_${sideIndex}`).css('marginTop'));
+    // 列表内当前操作块对于屏幕的坐标
+    this.siderNodeX = $(`#motion_${sideIndex}`).offset().left;
+    this.siderNodeY = $(`#motion_${sideIndex}`).offset().top + num;
   }
   cdkDragEnds(event: CdkDragEnd) {
     console.log('CdkDragEnd', event);
-    const currentNode: CdkDragNode = event.source.data;
+  }
+  drop(event: CdkDragDrop<string[]>) {
+    console.log('CdkDragDrop', event);
+    const currentNode: CdkDragNode = event.item.data;
     const nodePanel: Node = {
       uid: 'node_' + this.nodeList.length,
       text: currentNode.name,
-      currentX: event.distance.x + 'px',
-      currentY: event.distance.y + 'px',
+      currentX: (event.distance.x + this.siderNodeX - this.staticX) + 'px',
+      currentY: (event.distance.y + this.siderNodeY - this.staticY) + 'px',
       color: currentNode.color,
       iconType: currentNode.iconType
     };
     this.nodeList.push(nodePanel);
     this.code++;
-  }
-  drop(event: CdkDragDrop<string[]>) {
-    console.log('CdkDragDrop', event);
+    const element = document.querySelector('#flow-panel');
+    this.changes = new MutationObserver((mutations) => {
+      console.log('mutation', mutations);
+      if (this.nodeList.length > 0) {
+        console.log('domLision', $('#' + this.nodeList[this.nodeList.length - 1].uid));
+        this.enty$.next(this.code + '');
+      }
+    });
+    this.changes.observe(element, {
+      childList: true
+    });
   }
 }
