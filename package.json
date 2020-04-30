@@ -27,7 +27,7 @@
     "@fortawesome/fontawesome-svg-core": "^1.2.14",
     "@fortawesome/free-solid-svg-icons": "^5.7.1",
     "d3": "^5.11.0",
-    "jquery": "^3.4.1",
+    "jquery": "^3.5.0",
     "jsplumb": "^2.11.2",
     "ng-zorro-antd": "^8.2.0",
     "ngx-drag-drop": "^2.0.0",
