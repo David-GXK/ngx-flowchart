@@ -26,7 +26,7 @@
     "@fortawesome/fontawesome-free": "^5.7.1",
     "@fortawesome/fontawesome-svg-core": "^1.2.14",
     "@fortawesome/free-solid-svg-icons": "^5.7.1",
-    "d3": "^5.11.0",
+    "d3": "^7.6.1",
     "jquery": "^3.4.1",
     "jsplumb": "^2.11.2",
     "ng-zorro-antd": "^8.2.0",
